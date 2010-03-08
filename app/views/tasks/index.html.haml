@@ -1,16 +1,21 @@
-= styles_for :task
+%table{ :width => "100%", :height => "100%", :cellpadding => 0, :cellspacing => 0, :class => :tabbed }
+  %tr
+    %td{ :class => :sidebar, :id => :sidebar, :valign => :top }
+      = render :partial => "layouts/sidebar"
+    %td{ :class => :main, :id => :main, :valign => :top }
+      - if @view == "completed"
+        - buckets = [["Today", :completed_today], ["Yesterday", :completed_yesterday], ["Last week", :completed_last_week], ["This month", :completed_this_month], ["Last month", :completed_last_month]]
+        .title Completed Tasks
+      - else
+        - buckets = [["Overdue", :overdue], ["As Soon As Possible", :due_asap], ["Today", :due_today], ["Tomorrow", :due_tomorrow], ["This Week", :due_this_week], ["Next Week", :due_next_week], ["Sometime Later", :due_later]]
+        = render :partial => "title"
 
-- if @view == "completed"
-  - buckets = Setting.task_completed
-  .title Completed Tasks
-- else
-  - buckets = Setting.task_bucket
-  = render :partial => "title"
+      %p.flash_message#tasks_flash{ hidden }
 
-.log#tasks
-  - buckets.each do |value, key|
-    %div{ hidden_if(filtered_out?(@view, key)), :id => "list_#{key}" }
-      %h3{:class => key}= value
-      .bucket{:id => key}= render :partial => @view, :collection => @tasks[key] || [], :locals => { :bucket => key }
-  - if @tasks.values.flatten.blank?
-    = render :partial => "empty"
+      .log#tasks
+        - buckets.each do |value, key|
+          %div{ hidden_if(filtered_out?(@view, key)), :id => "list_#{key}" }
+            %h3{:class => key}= value
+            .bucket{:id => key}= render :partial => @view, :collection => @tasks[key] || [], :locals => { :bucket => key }
+        - if @tasks.values.flatten.blank?
+          = render :partial => "empty"

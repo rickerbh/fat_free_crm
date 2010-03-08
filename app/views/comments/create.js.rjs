@@ -1,6 +1,10 @@
-if @comment.valid?
-  page.insert_html :after, :comment_new, :partial => "common/comment", @collection => [ @comment ]
-  page[dom_id(@comment)].visual_effect :highlight, :duration => 1.5
+if @show_comment
+  if @comment.valid?
+    page.insert_html :after, :comment_new, :partial => "common/comment", @collection => [ @comment ]
+    page[dom_id(@comment)].visual_effect :highlight, :duration => 1.5
+  end
+else
+  page.call 'Modalbox.hide'
 end
 page[:comment_comment].clear
 page[:comment_comment].focus

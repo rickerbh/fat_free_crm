@@ -1,6 +1,8 @@
-.comment[comment]
-  = link_to avatar_for(comment.user, :size => "25x25"), user_path(comment.user)
-  .body
-    = link_to comment.user.full_name, user_path(comment.user)
-    %tt= time_ago(comment.created_at)
-    %dt= simple_format comment.comment
+- cache(comment) do
+  .comment[comment]{ highlightable(dom_id(comment, :tools)) }
+    .tools{ invisible, :id => dom_id(comment, :tools) }
+      %small
+        = link_to_delete(comment) + "&nbsp;"
+    .body
+      %tt= comment.created_at.to_s(:short)
+      %dt= simple_format property_link_helper(RedCloth.new(comment.comment).to_html)

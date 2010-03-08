@@ -1,0 +1,25 @@
+- edit ||= false
+- collapsed = session[:task_recurring].nil?
+= subtitle :task_recurring, collapsed
+
+.section
+  %small#task_recurring_intro{ hidden_if(!collapsed) }
+    = "You can add recurring information later." unless edit
+  #task_recurring{ hidden_if(collapsed) }
+    %table{ :width => 500, :cellpadding => 0, :cellspacing => 0 }
+      %tr
+        %td{ :valign => :top, :colspan => 5 }
+          .label.top.req Is recurring?:
+          = f.check_box :is_recurring
+      %tr
+        %td{ :valign => :top }
+          .label.req Repeats every:
+          = select_tag :period_count, options_for_select(([""] << (1..12).to_a).flatten, ""), { :style => "width:160px"}
+        %td= spacer
+        %td{ :valign => :top }
+          .label.req Period:
+          = select_tag :period, options_for_select({"" => "0", "days" => "1", "weeks" => "2", "months" => "3", "years" => "4"}, "0"), { :style => "width:160px"}
+        %td= spacer
+        %td{ :valign => :top }
+          .label.req End date:
+          = calendar_date_select :task, :recurring_end_date, { :style => "width:160px" }

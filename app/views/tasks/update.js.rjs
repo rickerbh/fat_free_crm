@@ -1,9 +1,8 @@
 id = dom_id(@task)
 if @task.errors.empty?
 
-  if !called_from_index_page?       # If it's not Tasks tab then we just reload appropriate
-    page << replace_content(@task)  # partial with the new task, and update recent items.
-    page[:recently].replace :partial => "common/recently"
+  if !called_from_index_page?
+    page << replace_content(@task)
   else
     if @task.assigned_to != @task_before_update.assigned_to
       page << reassign(id)
@@ -13,9 +12,8 @@ if @task.errors.empty?
       page << replace_content(@task, @task.bucket)
     end
   end
-
-else # Errors
-  page.call "crm.date_select_popup", :task_calendar, :task_bucket
+else
+  page.call "restar.date_select_popup", :task_calendar, :task_bucket
   page[id].visual_effect :shake, :duration => 0.25, :distance => 6
   page[:task_name].focus
 end

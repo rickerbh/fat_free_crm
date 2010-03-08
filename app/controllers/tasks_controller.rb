@@ -15,28 +15,36 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #------------------------------------------------------------------------------
 
-class TasksController < ApplicationController
-  before_filter :require_user
-  before_filter :update_sidebar, :only => :index
-  before_filter :set_current_tab, :only => [ :index, :show ]
+require 'icalendar'
 
-  # GET /tasks
-  # GET /tasks.xml
-  #----------------------------------------------------------------------------
+class TasksController < ApplicationController
+  before_filter :login_required
+  before_filter :update_sidebar, :only => :index
+  
+  def ical
+    @cal = Icalendar::Calendar.new
+    current_user.tasks.find(:all).each do |t|
+      event = Icalendar::Event.new
+      event.start = t.due_at.to_date
+      event.end = t.due_at.to_date
+      description = t.name
+      description << " (#{t.asset.full_name})" if t.asset
+      event.summary = description
+      @cal.add event
+    end
+    send_data @cal.to_ical, :filename => "calendar.ics", :type => "text/calendar"
+  end
+  
   def index
     @view = params[:view] || "pending"
-    @tasks = Task.find_all_grouped(@current_user, @view)
+    @tasks = Task.scoped(:include => [:user, :asset]).find_all_grouped(@current_user, @view)
 
     respond_to do |format|
-      format.html # index.html.haml
-      # Hash keys must be strings... symbols generate "undefined method 'singularize' error"
+      format.html 
       format.xml  { render :xml => @tasks.inject({}) { |tasks, (k,v)| tasks[k.to_s] = v; tasks } }
     end
   end
 
-  # GET /tasks/1
-  # GET /tasks/1.xml                                                       HTML
-  #----------------------------------------------------------------------------
   def show
     respond_to do |format|
       format.html { render :action => :index }
@@ -44,37 +52,31 @@ class TasksController < ApplicationController
     end
   end
 
-  # GET /tasks/new
-  # GET /tasks/new.xml                                                     AJAX
-  #----------------------------------------------------------------------------
   def new
     @view = params[:view] || "pending"
     @task = Task.new
-    @users = User.except(@current_user).all
-    @bucket = Setting.task_bucket[1..-1] << [ "On Specific Date...", :specific_time ]
-    @category = Setting.invert(:task_category)
+    @users = []    @bucket = [["As Soon As Possible", :due_asap], ["Tomorrow", :due_tomorrow], ["4 Days", :due_four_days], ["1 Week", :due_one_week], ["2 Weeks", :due_two_weeks], ["1 Month", :due_one_month], ["6 Months", :due_six_months], ["On Specific Date...", :specific_time]]
+    @category = [["Appraisal", :appraisal], ["Buyer networking", :buyer_networking], ["Email", :email], ["Listing presentation", :listing_presentation], ["Networking", :networking], ["Placing signage", :placing_signage], ["Prospecting call", :prospecting_call], ["Send letter", :send_letter], ["Vendor Meeting", :vendor_meeting]]
     if params[:related]
       model, id = params[:related].split("_")
       instance_variable_set("@asset", model.classify.constantize.my(@current_user).find(id))
     end
 
     respond_to do |format|
-      format.js   # new.js.rjs
+      format.js  
       format.xml  { render :xml => @task }
     end
 
-  rescue ActiveRecord::RecordNotFound # Kicks in if related asset was not found.
+  rescue ActiveRecord::RecordNotFound
     respond_to_related_not_found(model, :js) if model
   end
 
-  # GET /tasks/1/edit                                                      AJAX
-  #----------------------------------------------------------------------------
   def edit
     @view = params[:view] || "pending"
     @task = Task.tracked_by(@current_user).find(params[:id])
     @users = User.except(@current_user).all
-    @bucket = Setting.task_bucket[1..-1] << [ "On Specific Date...", :specific_time ]
-    @category = Setting.invert(:task_category)
+    @bucket = [["As Soon As Possible", :due_asap], ["Tomorrow", :due_tomorrow], ["4 Days", :due_four_days], ["1 Week", :due_one_week], ["2 Weeks", :due_two_weeks], ["1 Month", :due_one_month], ["6 Months", :due_six_months]][1..-1] << [ "On Specific Date...", :specific_time ]
+    @category = [["Appraisal", :appraisal], ["Buyer networking", :buyer_networking], ["Email", :email], ["Listing presentation", :listing_presentation], ["Networking", :networking], ["Phone call - Buyer", :phone_call_buyer], ["Placing signage", :placing_signage], ["Prospecting call", :prospecting_call], ["Send letter", :send_letter], ["Vendor Meeting", :vendor_meeting]]
     @asset = @task.asset if @task.asset_id?
     if params[:previous] =~ /(\d+)\z/
       @previous = Task.tracked_by(@current_user).find($1)
@@ -85,28 +87,34 @@ class TasksController < ApplicationController
     respond_to_not_found(:js) unless @task
   end
 
-  # POST /tasks
-  # POST /tasks.xml                                                        AJAX
-  #----------------------------------------------------------------------------
   def create
-    @task = Task.new(params[:task]) # NOTE: we don't display validation messages for tasks.
+    if params[:task][:is_recurring]
+      if params[:period] == "1"
+        params[:task][:recurring_period] = 1440 * params[:period_count].to_i
+      elsif params[:period] == "2"
+        params[:task][:recurring_period] = 10080 * params[:period_count].to_i
+      elsif params[:period] == "3"
+        params[:task][:recurring_period] = 43829 * params[:period_count].to_i
+      elsif params[:period] == "4"
+        params[:task][:recurring_period] = 525948 * params[:period_count].to_i
+      end
+    end
+
+    @task = Task.create(params[:task])
     @view = params[:view] || "pending"
 
     respond_to do |format|
-      if @task.save
+      if @task.errors.empty?
         update_sidebar if called_from_index_page?
-        format.js   # create.js.rjs
+        format.js   
         format.xml  { render :xml => @task, :status => :created, :location => @task }
       else
-        format.js   # create.js.rjs
+        format.js  
         format.xml  { render :xml => @task.errors, :status => :unprocessable_entity }
       end
     end
   end
-
-  # PUT /tasks/1
-  # PUT /tasks/1.xml                                                       AJAX
-  #----------------------------------------------------------------------------
+  
   def update
     @view = params[:view] || "pending"
     @task = Task.tracked_by(@current_user).find(params[:id])
@@ -127,10 +135,10 @@ class TasksController < ApplicationController
           end
           update_sidebar
         end
-        format.js   # update.js.rjs
+        format.js  
         format.xml  { head :ok }
       else
-        format.js   # update.js.rjs
+        format.js 
         format.xml  { render :xml => @task.errors, :status => :unprocessable_entity }
       end
     end
@@ -139,22 +147,18 @@ class TasksController < ApplicationController
     respond_to_not_found(:js, :xml)
   end
 
-  # DELETE /tasks/1
-  # DELETE /tasks/1.xml                                                    AJAX
-  #----------------------------------------------------------------------------
   def destroy
     @view = params[:view] || "pending"
     @task = Task.tracked_by(@current_user).find(params[:id])
     @task.destroy if @task
 
-    # Make sure bucket's div gets hidden if we're deleting last task in the bucket.
     if Task.bucket_empty?(params[:bucket], @current_user, @view)
       @empty_bucket = params[:bucket]
     end
 
     update_sidebar if called_from_index_page?
     respond_to do |format|
-      format.js   # destroy.js.rjs
+      format.js
       format.xml  { head :ok }
     end
 
@@ -162,21 +166,45 @@ class TasksController < ApplicationController
     respond_to_not_found(:js, :xml)
   end
 
-  # PUT /tasks/1/complete
-  # PUT /leads/1/complete.xml                                              AJAX
-  #----------------------------------------------------------------------------
   def complete
     @task = Task.tracked_by(@current_user).find(params[:id])
-    @task.update_attributes(:completed_at => Time.now, :completed_by => @current_user.id) if @task
 
-    # Make sure bucket's div gets hidden if it's the last completed task in the bucket.
+    if @task.is_recurring
+      unless @task.recurring_end_date.nil?
+        if @task.recurring_end_date > @task.due_at + @task.recurring_period.minutes
+          # Create a new task because the end date isn't up yet
+          @task_copy = @task.clone
+          @task_copy.due_at = @task_copy.due_at + @task_copy.recurring_period.minutes
+          @task_copy.calendar = @task_copy.due_at.strftime("%B %d %Y %H:%M:%S")
+          @task_copy.updated_at = ::Time.now
+          @task_copy.save!
+        else
+          # task is recurring, but end date has passed.  
+          # task will be closed later in this method
+        end
+      else
+        # task is recurring, but does not have an end date (recurrs forever)
+        # Create the replacement task, close the original, no end date on replacement
+        @task_copy = @task.clone
+        @task_copy.due_at = @task_copy.due_at + @task_copy.recurring_period.minutes
+        @task_copy.calendar = @task_copy.due_at.strftime("%B %d %Y %H:%M:%S")
+        @task_copy.updated_at = ::Time.now
+        @task_copy.save!
+      end
+    end
+    if @task.bucket == "due_asap"
+      @task.update_attributes(:completed_at => Time.now, :completed_by => @current_user.id, :calendar => Time.now.strftime("%B %d %Y %H:%M:%S")) if @task
+    else
+      @task.update_attributes(:completed_at => Time.now, :completed_by => @current_user.id, :calendar => @task.due_at.strftime("%B %d %Y %H:%M:%S")) if @task
+    end
+
     if Task.bucket_empty?(params[:bucket], @current_user)
       @empty_bucket = params[:bucket]
     end
 
     update_sidebar unless params[:bucket].blank?
     respond_to do |format|
-      format.js   # complete.js.rjs
+      format.js  
       format.xml  { head :ok }
     end
 
@@ -184,8 +212,6 @@ class TasksController < ApplicationController
     respond_to_not_found(:js, :xml)
   end
 
-  # Ajax request to filter out a list of tasks.                            AJAX
-  #----------------------------------------------------------------------------
   def filter
     @view = params[:view] || "pending"
 
@@ -199,8 +225,6 @@ class TasksController < ApplicationController
   end
 
   private
-  # Yields array of current filters and updates the session using new values.
-  #----------------------------------------------------------------------------
   def update_session
     name = "filter_by_task_#{@view}"
     filters = (session[name].nil? ? [] : session[name].split(","))
@@ -208,25 +232,21 @@ class TasksController < ApplicationController
     session[name] = filters.uniq.join(",")
   end
 
-  # Collect data necessary to render filters sidebar.
-  #----------------------------------------------------------------------------
   def update_sidebar
     @view = params[:view]
     @view = "pending" unless %w(pending assigned completed).include?(@view)
     @task_total = Task.totals(@current_user, @view)
 
-    # Update filters session if we added, deleted, or completed a task.
     if @task
       update_session do |filters|
-        if @empty_bucket  # deleted, completed, rescheduled, or reassigned and need to hide a bucket
+        if @empty_bucket  
           filters.delete(@empty_bucket)
-        elsif !@task.deleted_at && !@task.completed_at # created new task
+        elsif !@task.deleted_at && !@task.completed_at
           filters << @task.computed_bucket
         end
       end
     end
 
-    # Create default filters if filters session is empty.
     name = "filter_by_task_#{@view}"
     unless session[name]
       filters = @task_total.keys.select { |key| key != :all && @task_total[key] != 0 }.join(",")

@@ -1,12 +1,12 @@
 %li[completed]{ highlightable(dom_id(completed, :tools)) }
   - unless completed.category.blank?
-    .strip{:class => completed.category}= Setting.task_category[completed.category.to_sym]
+    .strip{:class => completed.category}= task_view_labels[completed.category.to_sym]
   - else
     .strip{:style => "color:white"} Other
   %div
     .tools{ invisible, :id => dom_id(completed, :tools) }
       %small=  link_to_task_delete(completed, bucket) if @current_user == completed.user
-    %strike= completed.name
+    %strike= property_link_helper(completed.name)
     - if completed.asset_id?
       == (re: #{link_to(completed.asset.name, polymorphic_url(completed.asset))})
     &ndash;
@@ -15,4 +15,4 @@
         = "completed " << distance_of_time_in_words(completed.completed_at, Time.now) << " ago"
         - if completed.completor.id != @current_user.id
           = "by " << link_to(completed.completor.full_name, user_path(completed.completor))
-      
+.clear      

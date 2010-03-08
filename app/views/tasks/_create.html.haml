@@ -5,6 +5,7 @@
   = hidden_field_tag "task[asset_id]", "#{@asset.id if @asset}"
   = hidden_field_tag "task[asset_type]", "#{@asset.class if @asset}"
   = render :partial => "tasks/top_section", :locals => { :f => f }
+  = render :partial => "tasks/recurring_section", :locals => { :f => f }
   .buttonbar
     = f.submit "Create Task"
     or
